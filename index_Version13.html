@@ -1,0 +1,798 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Valentine Interactive — baby do you love me?</title>
+
+  <!-- confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+  <style>
+    :root{
+      --bg1:#ffd6e7;
+      --bg2:#ffeef6;
+      --card:#ffffffcc;
+      --accent:#ff3b7a;
+      --accentHover:#ff1f68;
+      --muted:#374151;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100svh;
+      display:grid;
+      place-items:center;
+      background:radial-gradient(circle at top,var(--bg2),var(--bg1));
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+      padding:16px;
+    }
+
+    #confettiCanvas{
+      position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:9999;
+    }
+
+    .card{
+      width:min(760px,96vw);
+      padding:26px 22px;
+      background:var(--card);
+      border-radius:18px;
+      backdrop-filter:blur(8px);
+      box-shadow:0 18px 60px rgba(0,0,0,.12);
+      text-align:center;
+    }
+
+    .nav{ display:flex; gap:8px; justify-content:center; margin-bottom:8px; }
+    .nav button{ background:#fff; border-radius:888px; padding:8px 12px; border:1px solid #eee; cursor:pointer; font-weight:700; }
+
+    .art{ width:min(300px,78vw); margin:0 auto 10px; display:block; filter:drop-shadow(0 10px 14px rgba(0,0,0,.12)); }
+
+    h1{ font-size:clamp(22px,4vw,36px); margin:6px 0 8px; text-transform:lowercase; }
+    .lead{ font-size:13px; color:var(--muted); margin-bottom:12px; opacity:.95; }
+
+    .questionWrap{ min-height:220px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; }
+
+    .button-zone{ position:relative; width:min(520px,92%); height:150px; margin:12px auto; touch-action:none; }
+    button.action{
+      position:absolute;
+      top:50%;
+      transform:translateY(-50%) scale(1);
+      padding:14px 22px;
+      font-size:18px;
+      font-weight:800;
+      border-radius:999px;
+      border:none;
+      cursor:pointer;
+      box-shadow:0 10px 24px rgba(0,0,0,.12);
+      transition:transform .14s cubic-bezier(.2,.9,.2,1), background .12s;
+      -webkit-tap-highlight-color:transparent;
+      user-select:none;
+    }
+    .yes{ background:var(--accent); color:#fff; left:18%; }
+    .yes:hover{ background:var(--accentHover); }
+    .no{ background:#e5e7eb; color:#111827; left:62%; }
+
+    .hint{ margin-top:10px; font-size:13px; color:var(--muted); opacity:.8; }
+
+    .hidden{ display:none !important; }
+    .resultFrame{ display:none; margin-top:18px; animation:pop .35s ease; }
+    .resultFrame.active{ display:block; }
+    .small{ font-size:13px; color:var(--muted); opacity:.95; }
+
+    .letterCard{
+      background:#fff; border-radius:12px; padding:14px; box-shadow:0 8px 30px rgba(0,0,0,.06); text-align:left; max-width:680px; margin:10px auto;
+    }
+    .giftsGrid{ display:flex; gap:12px; justify-content:center; margin-top:12px; flex-wrap:wrap; }
+    .gift{ background:#fff; border-radius:10px; padding:10px 14px; width:160px; box-shadow:0 8px 20px rgba(0,0,0,.06); cursor:pointer; text-align:center; }
+    .doodle{ font-size:30px; margin-bottom:6px; }
+
+    /* photo box + remove button + caption */
+    .photoBox{ position:relative; width:220px; height:180px; background:#fff; border-radius:8px; display:inline-block; margin:8px; box-shadow:0 6px 18px rgba(0,0,0,.06); overflow:hidden; vertical-align:top; padding-bottom:6px; }
+    .photoBox img{ display:block; width:100%; height:140px; object-fit:cover; border-bottom: none; }
+    .removePhotoBtn{
+      position:absolute;
+      top:6px;
+      right:6px;
+      background:rgba(0,0,0,0.55);
+      color:#fff;
+      border:none;
+      border-radius:6px;
+      padding:4px 7px;
+      font-weight:700;
+      cursor:pointer;
+      z-index:2;
+      line-height:1;
+    }
+    .removePhotoBtn:hover{ background:rgba(0,0,0,0.7); }
+
+    /* caption: cursive/italic style */
+    .photoCaption{
+      font-family: "Brush Script MT", "Segoe Script", "Comic Sans MS", cursive;
+      font-style:italic;
+      text-align:center;
+      margin-top:6px;
+      font-size:14px;
+      color:#2b2b2b;
+      user-select:none;
+    }
+
+    .finalVideo{ max-width:760px; margin:0 auto; }
+
+    @keyframes pop{ from{ transform:scale(.96); opacity:0 } to{ transform:scale(1); opacity:1 } }
+    @media (max-width:480px){
+      .button-zone{ height:180px; }
+      .yes,.no{ padding:12px 18px; font-size:16px; }
+      .photoBox{ width:46%; }
+    }
+
+    /* small toolbar for upload + clear + export */
+    .photoToolbar{ display:flex; gap:8px; justify-content:center; align-items:center; margin-top:8px; }
+    .photoToolbar button.action{ position:static; transform:none; padding:8px 10px; font-size:14px; }
+    .dragover{ outline:3px dashed rgba(0,0,0,0.08); border-radius:8px; }
+  </style>
+</head>
+<body>
+  <canvas id="confettiCanvas"></canvas>
+
+  <main class="card">
+    <div class="nav">
+      <button id="restartBtn">Restart</button>
+    </div>
+
+    <!-- QUESTION AREA (used for step 0..4) -->
+    <section id="questionArea" class="questionWrap">
+      <!-- teddy art -->
+      <svg class="art" viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="furC" x1="0" x2="1"><stop offset="0" stop-color="#f7c7a1"/><stop offset="1" stop-color="#f2a97b"/></linearGradient>
+          <linearGradient id="innerEarC" x1="0" x2="1"><stop offset="0" stop-color="#ffd6de"/><stop offset="1" stop-color="#ffb3c7"/></linearGradient>
+          <linearGradient id="heartC" x1="0" x2="1"><stop offset="0" stop-color="#ff4d7d"/><stop offset="1" stop-color="#ff1f68"/></linearGradient>
+        </defs>
+        <ellipse cx="160" cy="160" rx="68" ry="54" fill="url(#furC)"/>
+        <circle cx="160" cy="100" r="52" fill="url(#furC)"/>
+        <g transform="translate(-36,-10)"><circle cx="132" cy="68" r="22" fill="url(#furC)"/><circle cx="132" cy="68" r="12" fill="url(#innerEarC)"/></g>
+        <g transform="translate(36,-10)"><circle cx="188" cy="68" r="22" fill="url(#furC)"/><circle cx="188" cy="68" r="12" fill="url(#innerEarC)"/></g>
+        <ellipse cx="160" cy="116" rx="28" ry="20" fill="#fff2e6"/>
+        <path d="M150 114 Q160 122 170 114 Q160 128 150 114Z" fill="#5b3a2a"/>
+        <path d="M155 125 Q160 132 165 125" stroke="#5b3a2a" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <circle cx="140" cy="96" r="8" fill="#2b2b2b"/><circle cx="180" cy="96" r="8" fill="#2b2b2b"/>
+        <circle cx="138" cy="94" r="2" fill="#fff"/><circle cx="178" cy="94" r="2" fill="#fff"/>
+        <ellipse cx="128" cy="118" rx="8" ry="5" fill="#ffb4c4" opacity="0.9"/>
+        <ellipse cx="192" cy="118" rx="8" ry="5" fill="#ffb4c4" opacity="0.9"/>
+        <path d="M240 70 C235 58 255 52 260 64 C265 52 285 58 280 70 C280 84 260 92 260 92 C260 92 240 84 240 70Z" fill="url(#heartC)" opacity="0.95"/>
+      </svg>
+
+      <h1 id="qTitle">do you love me🧸🙁</h1>
+      <div id="qLead" class="lead">life is incredible journey, i want to spend every single second with you bby</div>
+
+      <div class="button-zone" id="zone">
+        <button id="yesBtn" class="action yes">Yes</button>
+        <button id="noBtn"  class="action no">No</button>
+      </div>
+
+      <div id="hint" class="hint">Try clicking No — watch what happens 😉</div>
+    </section>
+
+    <!-- CAT VIEW (shown at step where user should "see this🥱") -->
+    <section id="catView" class="resultFrame">
+      <h2>see this🥱</h2>
+      <!-- inline playful cat-with-gun SVG (cartoonish) -->
+      <svg class="art" viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <!-- simple cat holding a playful toy "gun" -->
+        <defs>
+          <linearGradient id="cfur" x1="0" x2="1"><stop offset="0" stop-color="#e9c7a1"/><stop offset="1" stop-color="#d19b6b"/></linearGradient>
+        </defs>
+        <!-- cat body -->
+        <ellipse cx="180" cy="150" rx="80" ry="52" fill="url(#cfur)"/>
+        <circle cx="180" cy="86" r="52" fill="url(#cfur)"/>
+        <circle cx="142" cy="50" r="20" fill="url(#cfur)"/><circle cx="218" cy="50" r="20" fill="url(#cfur)"/>
+        <ellipse cx="180" cy="106" rx="30" ry="22" fill="#fff2e6"/>
+        <circle cx="165" cy="86" r="6" fill="#222"/><circle cx="195" cy="86" r="6" fill="#222"/>
+        <path d="M170 102 Q180 110 190 102" stroke="#5b3a2a" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <!-- toy gun (cartoony) -->
+        <g transform="translate(220,120) rotate(6)">
+          <rect x="0" y="0" width="72" height="16" rx="6" fill="#2d2d2d"/>
+          <rect x="-16" y="4" width="36" height="10" rx="4" fill="#6b6b6b" />
+          <circle cx="68" cy="8" r="6" fill="#9b9b9b"/>
+        </g>
+      </svg>
+
+      <div class="small">ahh... the answer is obvious now — because "yes" has grown so big that "no" isn't visible 😅</div>
+      <div style="margin-top:12px;">
+        <button id="catYes" class="action yes" style="position:static; transform:none; padding:10px 18px;">Yes</button>
+      </div>
+    </section>
+
+    <!-- VALENTINE LETTER FRAME -->
+    <section id="valFrame" class="resultFrame">
+      <h2>happy valentine day baby!</h2>
+
+      <!-- cute couple teddies (simple SVG) -->
+      <svg class="art" viewBox="0 0 420 220" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs><linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#f7c7a1"/><stop offset="1" stop-color="#f2a97b"/></linearGradient></defs>
+        <!-- left teddy -->
+        <g transform="translate(40,20)">
+          <circle cx="70" cy="50" r="40" fill="url(#g1)"/>
+          <ellipse cx="70" cy="120" rx="48" ry="36" fill="url(#g1)"/>
+        </g>
+        <!-- right teddy -->
+        <g transform="translate(180,20)">
+          <circle cx="70" cy="50" r="40" fill="url(#g1)"/>
+          <ellipse cx="70" cy="120" rx="48" ry="36" fill="url(#g1)"/>
+        </g>
+        <!-- little hearts -->
+        <path d="M210 30 C205 18 225 14 230 26 C235 14 255 18 250 30 C250 44 230 56 230 56 C230 56 210 44 210 30Z" fill="#ff6b93" opacity=".95" />
+      </svg>
+
+      <div class="small" style="max-width:760px; margin:6px auto 12px;">every second with you celebration. u are very special in my life drlngg</div>
+
+      <div style="display:flex; gap:12px; justify-content:center; margin-top:8px;">
+        <button id="seeGiftsBtn" class="action yes" style="position:static; transform:none; padding:10px 14px; margin-right:6px;">see my gifts</button>
+        <button id="finalBtn" class="action no" style="position:static; transform:none; padding:10px 14px;">finalyyy</button>
+      </div>
+    </section>
+
+    <!-- GIFTS SCREEN -->
+    <section id="giftsFrame" class="resultFrame">
+      <h2>open a gift 🎁</h2>
+      <div class="giftsGrid" style="margin-top:10px;">
+        <div class="gift" id="gift1">
+          <div class="doodle">🎲</div>
+          <div><strong>Gift 1</strong></div>
+          <div class="small">a little quiz</div>
+        </div>
+        <div class="gift" id="gift2">
+          <div class="doodle">✉️</div>
+          <div><strong>Gift 2</strong></div>
+          <div class="small">a letter</div>
+        </div>
+        <div class="gift" id="gift3">
+          <div class="doodle">📸</div>
+          <div><strong>Gift 3</strong></div>
+          <div class="small">our photos</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <button id="giftsBack" class="action no" style="position:static; transform:none; padding:8px 12px;">back</button>
+      </div>
+    </section>
+
+    <!-- GIFT 1: QUIZ (single-question flow) -->
+    <section id="gift1Frame" class="resultFrame">
+      <h2><strong>quiz for you 😚</strong></h2>
+
+      <div class="letterCard" id="quizBox">
+        <div id="quizQuestionSection">
+          <div id="quizQuestion" style="font-weight:700;"></div>
+          <div id="quizOptions" style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;"></div>
+          <div id="quizMsg" class="small" style="margin-top:10px;"></div>
+          <div style="margin-top:12px;">
+            <button id="quizNext" class="action yes" style="position:static; transform:none; padding:8px 12px; display:none;">next</button>
+            <button id="quizBack" class="action no" style="position:static; transform:none; padding:8px 12px;">back</button>
+          </div>
+        </div>
+
+        <div id="quizResult" style="margin-top:10px; display:none;">
+          <div style="font-weight:800; font-size:18px;">yay! you passed the test! you really love me!❤️😭</div>
+          <div style="margin-top:10px;">
+            <button id="quizDoneBack" class="action no" style="position:static; transform:none; padding:8px 12px;">back</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GIFT 2: LETTER -->
+    <section id="gift2Frame" class="resultFrame">
+      <h2><strong>A letter for you baby</strong></h2>
+      <div class="letterCard">
+        <pre style="white-space:pre-wrap; margin:0; font-family:inherit; color:var(--muted);">
+my baby,
+                 thank you for being my person. i want to hold your hand through every season of life. you are my home. you are my everything. and i love you so so much bbu. Be the sa,e as you are and[...]
+forever yours,❤️
+        </pre>
+      </div>
+      <div style="margin-top:10px;"><button id="gift2Back" class="action no" style="position:static; transform:none; padding:8px 12px;">back</button></div>
+    </section>
+
+    <!-- GIFT 3: PHOTOS (upload + clear + export + remove each) -->
+    <section id="gift3Frame" class="resultFrame">
+      <h2><strong>look at this cutie😭</strong></h2>
+
+      <div class="photoToolbar">
+        <button id="uploadPhotosBtn" class="action yes">Upload photos</button>
+        <button id="clearPhotosBtn" class="action no">Clear photos</button>
+        <button id="exportPhotosBtn" class="action yes">Export photos (standalone)</button>
+        <input id="photoUpload" type="file" accept="image/*" multiple class="hidden" />
+      </div>
+
+      <div id="photoGallery" style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-top:12px;">
+        <!-- gallery starts empty; user uploads will fill this -->
+      </div>
+
+      <div style="margin-top:12px;"><button id="gift3Back" class="action no" style="position:static; transform:none; padding:8px 12px;">back</button></div>
+    </section>
+
+    <!-- FINAL VIDEO / CLOSING -->
+    <section id="finalFrame" class="resultFrame">
+      <h2><strong>my forever 🧿❤️💋</strong></h2>
+
+      <div class="finalVideo letterCard" style="text-align:center;">
+        <!-- Replace the video src with your actual video later -->
+        <div style="margin-bottom:12px;">
+          <video id="finalVideoPlayer" controls style="max-width:100%; border-radius:8px;">
+            <source src="" type="video/mp4">
+            Your browser does not support the video tag.
+          </video>
+        </div>
+
+        <div style="color:var(--muted); white-space:pre-wrap; text-align:left;">
+I love you more than words can say❤️,
+no matter where life takes us, my heart will always choose you, thank you for being my peace, my smile, my love.
+HAPPY VALENTINE'S DAY and every day after, i'm grateful to call you mine.
+        </div>
+
+        <div style="margin-top:12px;"><button id="restartFinal" class="action yes" style="position:static; transform:none; padding:8px 12px;">restart</button></div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // confetti
+    const canvas = document.getElementById('confettiCanvas');
+    function resizeCanvas(){
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      canvas.width = Math.floor(window.innerWidth * dpr);
+      canvas.height = Math.floor(window.innerHeight * dpr);
+      canvas.style.width = window.innerWidth + 'px';
+      canvas.style.height = window.innerHeight + 'px';
+    }
+    resizeCanvas(); window.addEventListener('resize', resizeCanvas);
+    const conf = confetti.create(canvas, { resize:false, useWorker:true });
+    function celebrate(){
+      const end = Date.now() + 1600;
+      (function frame(){
+        conf({ particleCount: 12, spread: 90, startVelocity: 45, ticks: 180, origin: { x: Math.random(), y: Math.random()*0.3 } });
+        if (Date.now() < end) requestAnimationFrame(frame);
+      })();
+      setTimeout(()=>conf({ particleCount:300, spread:140, startVelocity:60, origin:{x:0.5,y:0.55} }), 300);
+    }
+
+    // state
+    let step = 0; // 0..4 are question steps; after that we show frames
+    let yesScale = 1;
+
+    // elements
+    const qTitle = document.getElementById('qTitle');
+    const qLead = document.getElementById('qLead');
+    const yesBtn = document.getElementById('yesBtn');
+    const noBtn  = document.getElementById('noBtn');
+    const zone   = document.getElementById('zone');
+    const hint   = document.getElementById('hint');
+
+    const questionArea = document.getElementById('questionArea');
+    const catView = document.getElementById('catView');
+    const valFrame = document.getElementById('valFrame');
+    const giftsFrame = document.getElementById('giftsFrame');
+    const gift1Frame = document.getElementById('gift1Frame');
+    const gift2Frame = document.getElementById('gift2Frame');
+    const gift3Frame = document.getElementById('gift3Frame');
+    const finalFrame = document.getElementById('finalFrame');
+
+    const catYes = document.getElementById('catYes');
+    const seeGiftsBtn = document.getElementById('seeGiftsBtn');
+    const finalBtn = document.getElementById('finalBtn');
+    const giftsBack = document.getElementById('giftsBack');
+    const restartBtn = document.getElementById('restartBtn');
+    const restartFinal = document.getElementById('restartFinal');
+
+    const gift1 = document.getElementById('gift1');
+    const gift2 = document.getElementById('gift2');
+    const gift3 = document.getElementById('gift3');
+
+    // quiz elements (new single-question flow)
+    const quizQuestion = document.getElementById('quizQuestion');
+    const quizOptions = document.getElementById('quizOptions');
+    const quizMsg = document.getElementById('quizMsg');
+    const quizNext = document.getElementById('quizNext');
+    const quizBack = document.getElementById('quizBack');
+    const quizResult = document.getElementById('quizResult');
+    const quizResultBack = document.getElementById('quizDoneBack');
+
+    // photo elements
+    const uploadPhotosBtn = document.getElementById('uploadPhotosBtn');
+    const clearPhotosBtn = document.getElementById('clearPhotosBtn');
+    const exportPhotosBtn = document.getElementById('exportPhotosBtn');
+    const photoInput = document.getElementById('photoUpload');
+    const photoGallery = document.getElementById('photoGallery');
+
+    // captions mapping (in order)
+    const captionsMap = [
+      'myy❤️',
+      'your🤭',
+      'us🧿🥹',
+      'lovee💋😍',
+      'my forever😚'
+    ];
+
+    // utility
+    function hideAllFrames(){
+      questionArea.classList.remove('hidden');
+      catView.classList.remove('active');
+      valFrame.classList.remove('active');
+      giftsFrame.classList.remove('active');
+      gift1Frame.classList.remove('active');
+      gift2Frame.classList.remove('active');
+      gift3Frame.classList.remove('active');
+      finalFrame.classList.remove('active');
+    }
+
+    function showFrame(name){
+      hideAllFrames();
+      questionArea.classList.add('hidden');
+      if(name === 'cat'){ catView.classList.add('active'); }
+      else if(name === 'val'){ valFrame.classList.add('active'); }
+      else if(name === 'gifts'){ giftsFrame.classList.add('active'); }
+      else if(name === 'gift1'){ gift1Frame.classList.add('active'); initQuiz(); }
+      else if(name === 'gift2'){ gift2Frame.classList.add('active'); }
+      else if(name === 'gift3'){ gift3Frame.classList.add('active'); }
+      else if(name === 'final'){ finalFrame.classList.add('active'); }
+    }
+
+    // initial populate
+    const questions = [
+      { title: 'do you love me🧸🙁', lead: 'life is incredible journey, i want to spend every single second with you bby' },
+      { title: 'will you be mine?🤭🪬', lead: '' },
+      { title: 'think again?😭', lead: '' },
+      { title: 'are you sure?😡', lead: '' },
+      { title: 'see this🥱', lead: '' } // (cat view)
+    ];
+
+    function updateQuestion(){
+      if(step >=0 && step <=4){
+        qTitle.textContent = questions[step].title;
+        qLead.textContent = questions[step].lead || '';
+        if(step === 4){
+          zone.style.display = 'none';
+          hint.style.display = 'none';
+          setTimeout(()=> showFrame('cat'), 350);
+        } else {
+          zone.style.display = '';
+          hint.style.display = '';
+        }
+      }
+    }
+
+    function setYesScale(s){
+      yesScale = s;
+      yesBtn.style.transform = `translateY(-50%) scale(${yesScale})`;
+    }
+
+    // handle no clicks during question steps (progress)
+    function onNoClicked(){
+      if(step >=0 && step < 3){
+        step++;
+        setYesScale(Math.min(3.2, yesScale + 0.6));
+        updateQuestion();
+        positionYesNo();
+      } else if(step === 3){
+        step = 4;
+        setYesScale(3.2);
+        noBtn.style.display = 'none';
+        updateQuestion();
+      }
+    }
+
+    // initial positioning helper
+    function positionYesNo(){
+      try{
+        const z = document.getElementById('zone').getBoundingClientRect();
+        const y = yesBtn.getBoundingClientRect();
+        const n = noBtn.getBoundingClientRect();
+        yesBtn.style.left = (z.width * 0.18) + 'px';
+        yesBtn.style.top = (z.height / 2 - y.height / 2) + 'px';
+        if(noBtn.style.display !== 'none'){
+          noBtn.style.left = (z.width * 0.62) + 'px';
+          noBtn.style.top = (z.height / 2 - n.height / 2) + 'px';
+        }
+      }catch(e){}
+    }
+
+    // Yes / No behavior for main questions
+    yesBtn.addEventListener('click', ()=>{
+      celebrate();
+      setTimeout(()=> showFrame('val'), 700);
+    });
+
+    noBtn.addEventListener('click', e => {
+      e.preventDefault();
+      onNoClicked();
+    });
+
+    // cat view yes
+    catYes.addEventListener('click', ()=>{
+      celebrate();
+      showFrame('val');
+      noBtn.style.display = 'none';
+    });
+
+    // val frame actions
+    seeGiftsBtn.addEventListener('click', ()=> showFrame('gifts'));
+    finalBtn.addEventListener('click', ()=> showFrame('final'));
+
+    giftsBack.addEventListener('click', ()=> showFrame('val'));
+
+    // gift clicks
+    gift1.addEventListener('click', ()=> showFrame('gift1'));
+    gift2.addEventListener('click', ()=> showFrame('gift2'));
+    gift3.addEventListener('click', ()=> showFrame('gift3'));
+
+    // gift backs
+    document.getElementById('giftsBack').addEventListener('click', ()=> showFrame('val'));
+    document.getElementById('gift2Back').addEventListener('click', ()=> showFrame('gifts'));
+    document.getElementById('gift3Back').addEventListener('click', ()=> showFrame('gifts'));
+    document.getElementById('quizDoneBack').addEventListener('click', ()=> showFrame('gifts'));
+
+    // Photo upload / preview for gift3 with remove + clear-all + drag/drop + paste support
+    (function(){
+      if(!uploadPhotosBtn || !photoInput || !photoGallery) return;
+
+      // helper to append a File (image) to gallery
+      function addImageFile(file){
+        if(!file || !file.type || !file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const dataUrl = e.target.result;
+          const box = document.createElement('div');
+          box.className = 'photoBox';
+
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'removePhotoBtn';
+          removeBtn.type = 'button';
+          removeBtn.title = 'Remove photo';
+          removeBtn.textContent = '✕';
+          removeBtn.addEventListener('click', () => {
+            box.remove();
+          });
+
+          const img = document.createElement('img');
+          img.src = dataUrl;
+          img.alt = file.name || 'uploaded photo';
+
+          // determine caption based on current index (before append)
+          const existing = photoGallery.querySelectorAll('.photoBox').length;
+          const captionText = captionsMap[existing] || '';
+
+          const caption = document.createElement('div');
+          caption.className = 'photoCaption';
+          caption.textContent = captionText;
+
+          box.appendChild(removeBtn);
+          box.appendChild(img);
+          box.appendChild(caption);
+          photoGallery.appendChild(box);
+        };
+        reader.onerror = () => console.error('FileReader error for file', file.name);
+        reader.readAsDataURL(file);
+      }
+
+      // handle FileList or Array of File objects
+      function handleFilesList(list){
+        const files = Array.from(list || []);
+        const maxToShow = 12; // optional limit
+        files.slice(0, maxToShow).forEach(f => addImageFile(f));
+      }
+
+      // click -> file chooser
+      uploadPhotosBtn.addEventListener('click', () => {
+        photoInput.click();
+      });
+      photoInput.addEventListener('change', (ev) => {
+        handleFilesList(ev.target.files);
+        photoInput.value = '';
+      });
+
+      // remove all
+      clearPhotosBtn.addEventListener('click', () => {
+        photoGallery.innerHTML = '';
+      });
+
+      // drag & drop on gallery
+      photoGallery.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        photoGallery.classList.add('dragover');
+      });
+      photoGallery.addEventListener('dragleave', () => {
+        photoGallery.classList.remove('dragover');
+      });
+      photoGallery.addEventListener('drop', (e) => {
+        e.preventDefault();
+        photoGallery.classList.remove('dragover');
+        const dtFiles = e.dataTransfer.files;
+        if(dtFiles && dtFiles.length) handleFilesList(dtFiles);
+      });
+
+      // paste from clipboard
+      document.addEventListener('paste', (e) => {
+        const items = (e.clipboardData && e.clipboardData.items) || [];
+        let found = false;
+        for (let i = 0; i < items.length; i++){
+          const item = items[i];
+          if(item.kind === 'file' && item.type.startsWith('image/')){
+            const file = item.getAsFile();
+            addImageFile(file);
+            found = true;
+          }
+        }
+        if(!found){
+          const text = (e.clipboardData && e.clipboardData.getData('text/html')) ||
+                       (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
+          const dataUrlMatch = text && text.match(/data:image\/[a-zA-Z]+;base64,[^\"]+/);
+          if(dataUrlMatch){
+            const dataUrl = dataUrlMatch[0];
+            fetch(dataUrl).then(res => res.blob()).then(blob => {
+              const f = new File([blob], 'pasted-image.png', { type: blob.type });
+              addImageFile(f);
+            }).catch(()=>{});
+          }
+        }
+      });
+    })();
+
+    // Export gallery images into one standalone HTML file (embeds images as data URLs and captions)
+    function exportStandaloneHTML() {
+      const boxes = Array.from(document.querySelectorAll('#photoGallery .photoBox'));
+      if (!boxes.length) { alert('No images to export'); return; }
+
+      const imagesHtml = boxes.map(box => {
+        const img = box.querySelector('img');
+        const capEl = box.querySelector('.photoCaption');
+        const captionText = capEl ? capEl.textContent.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
+        const src = img ? img.src : '';
+        return `<div style="width:320px;height:auto;overflow:hidden;border-radius:8px;margin:8px;text-align:center;">
+                  <img src="${src}" alt="" style="width:100%;height:200px;object-fit:cover;display:block" />
+                  <div style="font-family: 'Brush Script MT', cursive; font-style:italic; margin-top:8px; font-size:16px;">${captionText}</div>
+                </div>`;
+      }).join('\n');
+
+      const css = `
+        body{ font-family:system-ui,Arial; padding:20px; background:#fff; color:#111 }
+        h1{ text-align:center; margin-bottom:18px }
+        .gallery{ display:flex; gap:12px; flex-wrap:wrap; justify-content:center }
+      `;
+
+      const html = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Photos</title><style>${css}</style></head>
+<body>
+  <h1>Photos</h1>
+  <div class="gallery">
+    ${imagesHtml}
+  </div>
+</body>
+</html>`;
+
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'photos-embedded.html';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }
+
+    // bind export button
+    if (exportPhotosBtn) exportPhotosBtn.addEventListener('click', exportStandaloneHTML);
+
+    // Quiz implementation: single-question flow
+    // Quiz data
+    const quizData = [
+      {
+        text: "Question 1: who is the boss in the relationship?",
+        options: [
+          { id: '1', label: 'obviously you', correct: true, successMsg: 'oho correct u r smart!😎' },
+          { id: '2', label: 'me', correct: false, successMsg: 'try again😒' }
+        ]
+      },
+      {
+        text: "Question 2: who fight alot in this relationship?😒",
+        options: [
+          { id: '1', label: 'always you', correct: false, successMsg: 'oops! try again' },
+          { id: '2', label: 'me', correct: true, successMsg: 'soo smart!😍' },
+          { id: '3', label: 'no one', correct: false, successMsg: 'soch lo firse!' }
+        ]
+      }
+    ];
+
+    let quizStep = 0;
+    let quizAnswersCorrect = [false, false];
+
+    function renderQuizQuestion(){
+      const q = quizData[quizStep];
+      quizQuestion.textContent = q.text;
+      quizOptions.innerHTML = '';
+      quizMsg.textContent = '';
+      quizNext.style.display = 'none';
+
+      q.options.forEach(opt => {
+        const b = document.createElement('button');
+        b.className = 'giftOption';
+        b.textContent = opt.label;
+        b.style.padding = '8px 12px';
+        b.style.borderRadius = '8px';
+        b.style.border = '1px solid #eee';
+        b.style.cursor = 'pointer';
+        b.style.background = '#fff';
+        b.setAttribute('data-id', opt.id);
+        b.addEventListener('click', () => {
+          // handle selection
+          if(opt.correct){
+            quizMsg.textContent = opt.successMsg;
+            quizMsg.style.color = 'green';
+            quizAnswersCorrect[quizStep] = true;
+            // if this is first question, show next; if second, show final result
+            if(quizStep === 0){
+              quizNext.style.display = 'inline-block';
+            } else {
+              // show final success once second Q correct
+              showQuizPassed();
+            }
+          } else {
+            quizMsg.textContent = opt.successMsg;
+            quizMsg.style.color = 'crimson';
+            quizAnswersCorrect[quizStep] = false;
+            // keep next hidden until correct
+            quizNext.style.display = 'none';
+          }
+        });
+        quizOptions.appendChild(b);
+      });
+    }
+
+    function initQuiz(){
+      quizStep = 0;
+      quizAnswersCorrect = [false, false];
+      quizResult.style.display = 'none';
+      document.getElementById('quizQuestionSection').style.display = '';
+      renderQuizQuestion();
+    }
+
+    quizNext.addEventListener('click', ()=>{
+      // move to next question
+      if(quizAnswersCorrect[quizStep]){
+        quizStep++;
+        if(quizStep < quizData.length){
+          renderQuizQuestion();
+        } else {
+          showQuizPassed();
+        }
+      }
+    });
+
+    function showQuizPassed(){
+      document.getElementById('quizQuestionSection').style.display = 'none';
+      quizResult.style.display = 'block';
+      celebrate();
+    }
+
+    // backup back buttons
+    quizBack.addEventListener('click', ()=> showFrame('gifts'));
+    document.getElementById('gift2Back').addEventListener('click', ()=> showFrame('gifts'));
+    document.getElementById('gift3Back').addEventListener('click', ()=> showFrame('gifts'));
+
+    // final restart buttons
+    restartBtn.addEventListener('click', ()=> location.reload());
+    restartFinal.addEventListener('click', ()=> location.reload());
+
+    // initial layout
+    window.addEventListener('load', ()=>{
+      positionYesNo();
+      updateQuestion();
+    });
+    window.addEventListener('resize', ()=> setTimeout(positionYesNo, 80));
+  </script>
+</body>
+</html>
